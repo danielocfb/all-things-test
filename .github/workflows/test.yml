@@ -1,0 +1,90 @@
+name: bpf-ci
+
+on:
+  push:
+
+    #jobs:
+    #  test:
+    #    runs-on: ubuntu-latest
+    #    name: Test
+    #    env:
+    #      KBUILD_OUTPUT: "kbuild-output/"
+    #    steps:
+    #      - uses: danielocfb/checkout@main
+    #      - name: Get commit time stamp
+    #        id: get-commit-timestamp
+    #        run: |
+    #          echo "::set-output name=timestamp::$(git show --format='%ct' --no-patch)"
+    #        shell: bash
+    #      - name: Pull recent KBUILD_OUTPUT contents
+    #        uses: actions/cache@v3
+    #        with:
+    #          path: |
+    #            ${{ env.KBUILD_OUTPUT }}/.config
+    #            ${{ env.KBUILD_OUTPUT }}
+    #          key: kbuild-output-${{ runner.os }}-${{ steps.get-commit-timestamp.outputs.timestamp }}-${{ github.sha }}
+    #          restore-keys: |
+    #            kbuild-output-${{ runner.os }}-${{ steps.get-commit-timestamp.outputs.timestamp }}-
+    #            kbuild-output-${{ runner.os }}-
+    #      - name: Stuff
+    #        run: |
+    #          readlink -f "${KBUILD_OUTPUT}" && echo "${KBUILD_OUTPUT} exists" || echo "${KBUILD_OUTPUT} does not exist"
+    #          mkdir -p "${KBUILD_OUTPUT}"
+    #          ls -al "${KBUILD_OUTPUT}"
+    #          date > "${KBUILD_OUTPUT}"/file1
+    #          date > "${KBUILD_OUTPUT}"/file2
+    #          ls -al "${KBUILD_OUTPUT}"
+    #          readlink -f "${KBUILD_OUTPUT}" && echo "${KBUILD_OUTPUT} exists" || echo "${KBUILD_OUTPUT} does not exist"
+jobs:
+  dump_contexts_to_log:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump GitHub context
+        id: github_context_step
+        run: echo '${{ toJSON(github) }}'
+      - name: Dump job context
+        run: echo '${{ toJSON(job) }}'
+      - name: Dump steps context
+        run: echo '${{ toJSON(steps) }}'
+      - name: Dump runner context
+        run: echo '${{ toJSON(runner) }}'
+      - name: Dump strategy context
+        run: echo '${{ toJSON(strategy) }}'
+      - name: Dump matrix context
+        run: echo '${{ toJSON(matrix) }}'
+  set-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          echo "::set-output name=matrix::{\"include\":[ \
+            {\"runs_on\": \"ubuntu-20.04\", \"toolchain\": \"gcc\"}, \
+            {\"runs_on\": \"ubuntu-18.04\", \"toolchain\": \"llvm-16\"}, \
+          ]}"
+  build-kernel:
+    needs: set-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.set-matrix.outputs.matrix) }}
+    runs-on: ${{ matrix.runs_on }}
+    name: ${{ matrix.runs_on }} with ${{ matrix.toolchain }}
+    steps:
+      - uses: actions/checkout@main
+      - run: |
+          echo ${{ matrix.runs_on }} with ${{ matrix.toolchain }}
+      - if: ${{ matrix.toolchain == 'gcc' }}
+        run: |
+          sleep 60
+  test-kernel:
+    needs: [set-matrix, build-kernel]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.set-matrix.outputs.matrix) }}
+    runs-on: ${{ matrix.runs_on }}
+    name: ${{ matrix.runs_on }} with ${{ matrix.toolchain }}
+    steps:
+      - uses: actions/checkout@main
+      - run: |
+          echo ${{ matrix.runs_on }} with ${{ matrix.toolchain }}
