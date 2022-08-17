@@ -55,19 +55,34 @@ jobs:
   set-matrix:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      build-matrix: ${{ steps.set-matrix-impl.outputs.build_matrix }}
+      test-matrix: ${{ steps.set-matrix-impl.outputs.test_matrix }}
     steps:
-      - id: set-matrix
+      - id: set-matrix-impl
+        shell: python -I {0}
         run: |
-          echo "::set-output name=matrix::{\"include\":[ \
-            {\"runs_on\": \"ubuntu-20.04\", \"toolchain\": \"gcc\"}, \
-            {\"runs_on\": \"ubuntu-18.04\", \"toolchain\": \"llvm-16\"}, \
-          ]}"
+          from json import dumps
+
+          matrix = [
+            {"runs_on": "ubuntu-20.04", "toolchain": "gcc"},
+            {"runs_on": "ubuntu-18.04", "toolchain": "llvm-16"},
+          ]
+          build_matrix = {"include": matrix}
+
+          print(f"{dumps(build_matrix)}")
+          print(f"::set-output name=build_matrix::{dumps(build_matrix)}")
+
+          test_matrix = {"include": [{**config, **{"test": test}}
+                           for config in matrix
+                             for test in ["test_progs", "test_maps", "test_verifier"]]}
+
+          print(f"{dumps(test_matrix)}")
+          print(f"::set-output name=test_matrix::{dumps(test_matrix)}")
   build-kernel:
     needs: set-matrix
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.set-matrix.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.set-matrix.outputs.build-matrix) }}
     runs-on: ${{ matrix.runs_on }}
     name: ${{ matrix.runs_on }} with ${{ matrix.toolchain }}
     steps:
@@ -78,12 +93,12 @@ jobs:
         run: |
           sleep 60
   test-kernel:
-    needs: [set-matrix, build-kernel]
+    needs: set-matrix
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.set-matrix.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.set-matrix.outputs.test-matrix) }}
     runs-on: ${{ matrix.runs_on }}
-    name: ${{ matrix.runs_on }} with ${{ matrix.toolchain }}
+    name: ${{ matrix.runs_on }} with ${{ matrix.toolchain }} test ${{ matrix.test }}
     steps:
       - uses: actions/checkout@main
       - run: |
