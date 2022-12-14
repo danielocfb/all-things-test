@@ -80,8 +80,20 @@ jobs:
 
           print(f"{dumps(test_matrix)}")
           print(f"::set-output name=test_matrix::{dumps(test_matrix)}")
+
+          needs = '''{
+            "dump_contexts_to_log": {
+              "result": "success",
+              "outputs": {}
+            }
+          }
+          '''
+          print(f"::set-output name=needs::{needs}")
+
   build-kernel:
-    needs: set-matrix
+    needs:
+      set-matrix:
+        output: foobar
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.set-matrix.outputs.build-matrix) }}
